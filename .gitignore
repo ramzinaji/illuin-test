@@ -1,0 +1,10 @@
+/data/
+AGENTS.md
+CLAUDE.md
+.venv/
+.DS_Store
+__pycache__/
+.ipynb_checkpoints/
+*.pyc
+.ruff_cache/
+.pytest_cache/
