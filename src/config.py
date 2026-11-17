@@ -29,7 +29,7 @@ SEED = 42
 class CleaningConfig:
     text_column: str = "prob_desc_description"
     language: str = "en"
-    # Seuil validé dans 01_eda : au-delà, les paires inspectées sont des variantes d'un même énoncé
+    # Seuil validé dans le notebook 01 : au-delà, les paires inspectées sont des variantes d'un même énoncé
     near_dup_threshold: float = 0.8
 
 
@@ -109,12 +109,12 @@ class FeatureConfig:
     # Blocs TF-IDF (vocabulaire et IDF appris sur le train de chaque fold) : ~1 700 et ~1 800 colonnes creuses
     tfidf_code_min_df: int = 5
     tfidf_desc_min_df: int = 10
-    # Régularisation propre à chaque bloc TF-IDF (réglée en CV, notebook 05)
+    # Régularisation propre à chaque bloc TF-IDF (réglée en CV, notebook 04)
     tfidf_code_C: float = 0.1
     tfidf_desc_C: float = 1.0
 
 
-# Meilleur modèle entraîné (notebook 05) : stacking des embeddings, de la difficulté et de la TF-IDF de description
+# Meilleur modèle entraîné (notebook 04) : stacking des embeddings, de la difficulté et de la TF-IDF de description
 BEST_STACKING_BLOCKS: tuple[str, ...] = (
     "description",
     "input_spec",

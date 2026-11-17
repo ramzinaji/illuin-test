@@ -6,13 +6,13 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import f1_score
 
-from src.class_tfidf import (
+from src.config import RegexConfig
+from src.features import (
     CODE_STOP_WORDS,
     CODE_TOKEN_PATTERN,
     NO_TAG,
     class_tfidf,
 )
-from src.config import RegexConfig
 from src.preprocessing import prepare_description
 
 DEFAULT_REGEX_CFG = RegexConfig()
