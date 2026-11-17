@@ -6,8 +6,22 @@ pyarrow>=15.0
 
 # Machine Learning & NLP
 scikit-learn>=1.4,<2.0
+iterative-stratification>=0.1.9
 torch>=2.2
 transformers>=4.40
+sentence-transformers>=3.0
+
+# Text preprocessing
+nltk>=3.8
+langdetect>=1.0.9
+
+# LLM (Gemini via Vertex AI, src/llm_tagger.py)
+google-genai>=1.0
+
+# Topic modeling
+bertopic>=0.16
+umap-learn>=0.5
+hdbscan>=0.8.33
 
 # CLI & Configuration
 typer>=0.12
