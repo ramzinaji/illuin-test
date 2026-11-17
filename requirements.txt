@@ -27,11 +27,6 @@ google-genai>=1.0
 # Données nettoyées partagées entre notebooks (data/processed/clean.parquet)
 pyarrow>=15.0
 
-# Topic modeling (notebook 02)
-bertopic>=0.16
-umap-learn>=0.5
-hdbscan>=0.8.33
-
 # Visualization & Exploration
 matplotlib>=3.8
 seaborn>=0.13
