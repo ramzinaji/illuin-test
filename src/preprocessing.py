@@ -1,113 +1,81 @@
-"""Nettoyage des descriptions : normalisation, filtre de langue, dédoublonnage."""
+"""Nettoyage des textes : normalisation, lemmatisation, filtre de langue et quasi-doublons."""
 
 import logging
 import re
 import unicodedata
-from functools import lru_cache
 
-import numpy as np
 import pandas as pd
 from langdetect import DetectorFactory, LangDetectException, detect
 from nltk.stem import WordNetLemmatizer
 from scipy.sparse.csgraph import connected_components
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from src.config import CleaningConfig
+from src.config import LANGUAGE, NEAR_DUP_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CLEANING_CFG = CleaningConfig()
-DetectorFactory.seed = 0  # langdetect est non déterministe sans seed
-
-# Lettres cyrilliques glissées dans des énoncés anglais (vu dans 01_eda) : on les translittère
-_HOMOGLYPHS = str.maketrans("АВЕКМНОРСТХаеорсухі", "ABEKMHOPCTXaeopcyxi")
-_LATEX_DELIM = re.compile(r"\${3}")
-_NON_ALNUM = re.compile(r"[^a-z0-9\s]")
-_SPACES = re.compile(r"\s+")
-# Mots alphabétiques (toutes langues) de 3+ lettres
-_WORDS = re.compile(r"[^\W\d_]{3,}")
-_LEMMATIZER = WordNetLemmatizer()
+DetectorFactory.seed = 0  # langdetect est aléatoire sans graine
+# Lettres cyrilliques glissées dans des énoncés anglais (vues pendant l'exploration)
+HOMOGLYPHS = str.maketrans("АВЕКМНОРСТХаеорсухі", "ABEKMHOPCTXaeopcyxi")
+_lemmatizer = WordNetLemmatizer()
 
 
-def normalize_text(text: str) -> str:
-    """Minuscules, homoglyphes translittérés, caractères spéciaux et LaTeX `$$$` retirés."""
-    text = unicodedata.normalize("NFKC", text).translate(_HOMOGLYPHS)
-    text = _LATEX_DELIM.sub(" ", text.lower())
-    text = _NON_ALNUM.sub(" ", text)
-    return _SPACES.sub(" ", text).strip()
+def normalize_text(text: str | None) -> str:
+    """Minuscules, homoglyphes translittérés, LaTeX `$$$` et ponctuation retirés ; champ absent → ""."""
+    if not isinstance(text, str):  # None ou NaN (champ facultatif absent)
+        return ""
+    text = unicodedata.normalize("NFKC", text).translate(HOMOGLYPHS).lower()
+    text = text.replace("$$$", " ")
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def lemmatize(text: str) -> str:
+    return " ".join(_lemmatizer.lemmatize(word) for word in text.split())
 
 
 def detect_language(text: str) -> str:
-    """Code langue ISO ('en', 'ru'...) ; 'unknown' si la détection échoue."""
-    # Sans ce filtre, les formules (variables d'une lettre, nombres) font classer des énoncés anglais en 'ca'
-    words = " ".join(_WORDS.findall(text))
+    # Mots de 3+ lettres seulement : sinon les formules (a, b, n...) font classer l'anglais en catalan
+    words = " ".join(re.findall(r"[^\W\d_]{3,}", text))
     try:
         return detect(words)
     except LangDetectException:
         return "unknown"
 
 
-def lemmatize(text: str, lemmatizer: WordNetLemmatizer | None = None) -> str:
-    """Lemmatisation mot à mot (WordNet) d'un texte déjà normalisé."""
-    lemmatizer = lemmatizer or _LEMMATIZER
-    return " ".join(lemmatizer.lemmatize(token) for token in text.split())
-
-
-@lru_cache(maxsize=16_384)
-def prepare_description(text: str) -> str:
-    """Texte brut -> normalisé -> lemmatisé : même traitement à l'entraînement et à l'inférence."""
-    # Cache : la recherche sur grille du notebook 03 retraite plusieurs fois les mêmes énoncés
-    return lemmatize(normalize_text(text))
-
-
-def near_duplicate_groups(texts: pd.Series, threshold: float) -> np.ndarray:
-    """Identifiant de groupe par texte ; deux textes au cosinus TF-IDF > `threshold` partagent un groupe."""
-    # TF-IDF est L2-normalisé : le produit X·Xᵀ (scipy.sparse) donne directement la similarité cosinus
-    tfidf = TfidfVectorizer(min_df=2).fit_transform(texts)
-    similarity = (tfidf @ tfidf.T).tocsr()
-    similarity.data = similarity.data > threshold
-    similarity.eliminate_zeros()
-    _, labels = connected_components(similarity, directed=False)
-    return labels
-
-
-def filter_language(
-    df: pd.DataFrame, cfg: CleaningConfig = DEFAULT_CLEANING_CFG
-) -> pd.DataFrame:
-    """Ajoute la colonne `language` et ne garde que les énoncés dans `cfg.language`."""
-    out = df.assign(language=df[cfg.text_column].map(detect_language))
-    kept = out[out["language"] == cfg.language]
-    logger.info("Filtre langue : %d -> %d exemples", len(df), len(kept))
-    return kept
-
-
-def add_clean_text(
-    df: pd.DataFrame, cfg: CleaningConfig = DEFAULT_CLEANING_CFG
-) -> pd.DataFrame:
-    """Ajoute `text_clean` (normalisé) et `text_lemma` (normalisé + lemmatisé)."""
-    clean = df[cfg.text_column].map(normalize_text)
-    return df.assign(text_clean=clean, text_lemma=clean.map(lemmatize))
-
-
-def assign_dup_groups(
-    df: pd.DataFrame, cfg: CleaningConfig = DEFAULT_CLEANING_CFG
-) -> pd.DataFrame:
-    """Ajoute `dup_group`, calculé sur le texte lemmatisé."""
-    return df.assign(
-        dup_group=near_duplicate_groups(df["text_lemma"], cfg.near_dup_threshold)
-    )
+def add_text_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Colonnes de texte nettoyé utilisées par les features (à l'entraînement comme à l'inférence)."""
+    out = df.copy()
+    out["text_clean"] = out["prob_desc_description"].map(normalize_text)
+    out["text_lemma"] = out["text_clean"].map(lemmatize)
+    out["input_spec_clean"] = out["prob_desc_input_spec"].map(normalize_text)
+    out["notes_clean"] = out["prob_desc_notes"].map(normalize_text)
+    out["source_code"] = out["source_code"].fillna("")
+    return out
 
 
 def drop_near_duplicates(df: pd.DataFrame) -> pd.DataFrame:
-    """Garde un exemple par `dup_group` : le plus petit `sample_id` (choix déterministe)."""
-    kept = df.sort_index().drop_duplicates("dup_group", keep="first")
-    logger.info("Dédoublonnage : %d -> %d exemples", len(df), len(kept))
-    return kept
+    """Garde un exemple (le plus petit sample_id) par groupe d'énoncés au cosinus TF-IDF > seuil."""
+    tfidf = TfidfVectorizer(min_df=2).fit_transform(df["text_lemma"])
+    # TF-IDF normalisé L2 : le produit scalaire est la similarité cosinus
+    similar = (tfidf @ tfidf.T) > NEAR_DUP_THRESHOLD
+    _, groups = connected_components(similar, directed=False)
+    return (
+        df.assign(dup_group=groups)
+        .sort_index()
+        .drop_duplicates("dup_group")
+        .drop(columns="dup_group")
+    )
 
 
-def clean_dataset(
-    df: pd.DataFrame, cfg: CleaningConfig = DEFAULT_CLEANING_CFG
-) -> pd.DataFrame:
-    """Pipeline complet : langue -> normalisation/lemmatisation -> suppression des quasi-doublons."""
-    df = add_clean_text(filter_language(df, cfg), cfg)
-    return drop_near_duplicates(assign_dup_groups(df, cfg))
+def clean_dataset(raw: pd.DataFrame) -> pd.DataFrame:
+    """Jeu d'entraînement : énoncés anglais, textes nettoyés, sans quasi-doublons."""
+    english = raw[raw["prob_desc_description"].map(detect_language) == LANGUAGE]
+    df = drop_near_duplicates(add_text_columns(english))
+    logger.info(
+        "Nettoyage : %d -> %d (langue) -> %d (quasi-doublons)",
+        len(raw),
+        len(english),
+        len(df),
+    )
+    return df

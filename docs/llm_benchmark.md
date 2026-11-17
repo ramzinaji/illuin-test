@@ -3,7 +3,7 @@
 ## Objectif
 
 Estimer une performance de référence « haute » avec un LLM généraliste, sans entraînement, et la comparer au meilleur
-modèle entraîné du projet : le stacking embeddings + difficulté + TF-IDF de la description (notebook 05).
+modèle entraîné du projet : le stacking embeddings + difficulté + TF-IDF de la description (notebook 04).
 
 ## Mise en place
 
@@ -13,12 +13,23 @@ modèle entraîné du projet : le stacking embeddings + difficulté + TF-IDF de 
 | Authentification | identifiants par défaut de `gcloud` (ADC) : aucune clé stockée. Le projet de quota est forcé sur le projet dédié pour que l'usage n'y soit pas mélangé à un autre projet. |
 | Modèle | `gemini-3.1-flash-lite` : le moins cher accessible depuis le projet (les modèles 2.5 renvoient 404 pour un projet récent) |
 | Coût estimé | environ 730 000 tokens d'entrée pour le test, soit environ 0,25 $ (tarifs d'agrégateurs, non vérifiés sur la page officielle) |
-| Code | [`src/llm_tagger.py`](../src/llm_tagger.py), paramètres dans `LLMConfig` ([`src/config.py`](../src/config.py)) |
+| Code | [`src/llm_tagger.py`](../src/llm_tagger.py) ; résultats lus dans [`notebooks_prod/04_multimodal_and_results.ipynb`](../notebooks_prod/04_multimodal_and_results.ipynb) |
+
+Mise en place du projet GCP (une seule fois) :
 
 ```bash
-python -m src.llm_tagger setup --billing-account <ID>                              # projet, facturation, API Vertex AI
-python -m src.llm_tagger models                                                    # modèles Gemini disponibles
-python -m src.llm_tagger predict --split test --model gemini-3.1-flash-lite        # cache data/llm/*.jsonl, reprise auto
+gcloud projects create illuin-codeforces-tags
+gcloud billing projects link illuin-codeforces-tags --billing-account=<ID>
+gcloud services enable aiplatform.googleapis.com --project=illuin-codeforces-tags
+gcloud auth application-default login
+```
+
+Prédictions sur le split test :
+
+```bash
+export GOOGLE_CLOUD_PROJECT=illuin-codeforces-tags
+python -m src.llm_tagger --limit 5                          # essai
+python -m src.llm_tagger --model gemini-3.1-flash-lite      # cache data/llm/*.jsonl, reprise auto
 ```
 
 **Prompt** (en anglais, comme les énoncés) :

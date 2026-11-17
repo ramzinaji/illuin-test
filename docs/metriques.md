@@ -1,8 +1,9 @@
 # Métriques d'évaluation
 
 Ce document décrit toutes les métriques utilisées pour évaluer et comparer les modèles du projet : ce qu'elles mesurent,
-leur formule, leur fonctionnement et leurs pièges. Le code correspondant est dans [`src/evaluate.py`](../src/evaluate.py)
-(métriques, seuils, bootstrap) et [`src/tuning.py`](../src/tuning.py) (Macro-AP, validation croisée).
+leur formule, leur fonctionnement et leurs pièges. Le code de production est dans [`src/evaluate.py`](../src/evaluate.py) (métriques) et
+[`src/model.py`](../src/model.py) (seuils par tag) ; Macro-AP, validation croisée et bootstrap sont dans
+[`notebooks_prod/03_models_benchmark.ipynb`](../notebooks_prod/03_models_benchmark.ipynb).
 
 ## 1. Cadre : une classification multi-label
 
