@@ -133,6 +133,10 @@ même façon d'un tag à l'autre, et un seuil unique de 0,5 serait sous-optimal 
 **Pourquoi sur la validation** : régler les seuils sur le test reviendrait à évaluer le modèle sur des données qui ont servi
 à le régler, ce qui gonflerait les scores.
 
+La grille (`start`, `stop`, `step`) est définie dans la section `thresholds` de
+[`configs/stacking.yaml`](../configs/stacking.yaml). Les seuils appris sont sauvegardés avec le modèle
+(`models/stacking.joblib`) et recalculés à chaque `python -m src.cli train`.
+
 ## 6. Plancher de référence : la stratégie « toujours oui »
 
 Prédire un tag pour **tous** les exercices donne un rappel de 1 et une précision égale à la prévalence $p_\ell$ du tag :
@@ -158,7 +162,7 @@ n'est pas concluant.
 ### Bootstrap apparié sur le test
 
 Le test ne compte que 726 exercices, donc un écart de quelques points peut être dû au hasard du découpage. Pour deux modèles
-A et B, la fonction `bootstrap_macro_f1_diff` procède ainsi :
+A et B, la fonction `bootstrap_diff` (notebooks 03 et 04) procède ainsi :
 1. tirer avec remise 726 exercices parmi les 726 du test ;
 2. calculer $\Delta = \text{Macro-F1}(A) - \text{Macro-F1}(B)$ **sur ces mêmes exercices** (d'où « apparié ») ;
 3. répéter 1 000 fois.

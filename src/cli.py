@@ -1,6 +1,6 @@
 """Ligne de commande : entraînement, prédiction et évaluation.
 
-python -m src.cli train                      # entraîne et sauvegarde models/stacking.joblib
+python -m src.cli train [--config fichier.yaml]  # entraîne et sauvegarde models/stacking.joblib
 python -m src.cli predict <fichier|dossier>  # tags prédits, une ligne JSON par exercice
 python -m src.cli evaluate [dossier]         # métriques ; sans dossier : split test du dataset
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.config import MODEL_PATH, RAW_DATA_DIR
+from src.config import DEFAULT_CONFIG_PATH, MODEL_PATH, RAW_DATA_DIR, Config
 from src.data import label_matrix, load_samples, split_labels
 from src.evaluate import global_metrics, per_tag_metrics
 from src.features import load_encoders
@@ -25,16 +25,17 @@ from src.train import train
 logger = logging.getLogger("src")
 
 
-def _test_split() -> pd.DataFrame:
-    """Le split test du dataset, avec le même nettoyage et le même découpage qu'à l'entraînement."""
-    df = clean_dataset(load_samples(RAW_DATA_DIR))
-    return df[split_labels(label_matrix(df["tags"])) == "test"]
+def _test_split(cfg: Config) -> pd.DataFrame:
+    """Le split test du dataset, avec le nettoyage et le découpage de la config d'entraînement."""
+    df = clean_dataset(load_samples(RAW_DATA_DIR), cfg.cleaning)
+    return df[split_labels(label_matrix(df["tags"]), cfg.split, cfg.seed) == "test"]
 
 
 def run_predict(path: Path, output: Path | None) -> None:
     df = load_samples(path)
     classifier = TagClassifier.load(MODEL_PATH)
-    predictions, _ = predict(df, classifier, load_encoders())
+    encoders = load_encoders(classifier.config.encoders)
+    predictions, _ = predict(df, classifier, encoders)
     lines = [
         json.dumps({"sample_id": int(sid), "tags": tags}, ensure_ascii=False)
         for sid, tags in zip(df.index, to_tag_lists(predictions, classifier.tags))
@@ -47,9 +48,10 @@ def run_predict(path: Path, output: Path | None) -> None:
 
 
 def run_evaluate(path: Path | None) -> None:
-    df = load_samples(path) if path else _test_split()
     classifier = TagClassifier.load(MODEL_PATH)
-    predictions, latencies = predict(df, classifier, load_encoders())
+    df = load_samples(path) if path else _test_split(classifier.config)
+    encoders = load_encoders(classifier.config.encoders)
+    predictions, latencies = predict(df, classifier, encoders)
     Y = label_matrix(df["tags"])
     print(
         f"{len(df)} exercices | latence médiane {np.median(latencies) * 1000:.0f} ms, max {latencies.max() * 1000:.0f} ms\n"
@@ -69,8 +71,14 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser(
+    train_cmd = commands.add_parser(
         "train", help="entraîne le modèle et l'évalue sur le split test"
+    )
+    train_cmd.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG_PATH,
+        help="fichier YAML d'hyperparamètres",
     )
     predict_cmd = commands.add_parser(
         "predict", help="prédit les tags de fichiers sample_*.json"
@@ -86,7 +94,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "train":
-        train()
+        train(args.config)
     elif args.command == "predict":
         run_predict(args.path, args.output)
     else:

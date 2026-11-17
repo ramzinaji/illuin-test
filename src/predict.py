@@ -25,7 +25,8 @@ def predict(
     for i in range(len(df)):
         start = time.perf_counter()
         row = add_text_columns(df.iloc[[i]])
-        predictions.append(classifier.predict(build_blocks(row, encoders))[0])
+        blocks = build_blocks(row, encoders, classifier.config.model.blocks)
+        predictions.append(classifier.predict(blocks)[0])
         latencies.append(time.perf_counter() - start)
 
     latencies = np.array(latencies)

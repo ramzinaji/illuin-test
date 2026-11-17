@@ -13,7 +13,7 @@ modèle entraîné du projet : le stacking embeddings + difficulté + TF-IDF de 
 | Authentification | identifiants par défaut de `gcloud` (ADC) : aucune clé stockée. Le projet de quota est forcé sur le projet dédié pour que l'usage n'y soit pas mélangé à un autre projet. |
 | Modèle | `gemini-3.1-flash-lite` : le moins cher accessible depuis le projet (les modèles 2.5 renvoient 404 pour un projet récent) |
 | Coût estimé | environ 730 000 tokens d'entrée pour le test, soit environ 0,25 $ (tarifs d'agrégateurs, non vérifiés sur la page officielle) |
-| Code | [`src/llm_tagger.py`](../src/llm_tagger.py) ; résultats lus dans [`notebooks_prod/04_multimodal_and_results.ipynb`](../notebooks_prod/04_multimodal_and_results.ipynb) |
+| Code | [`src/llm_tagger.py`](../src/llm_tagger.py) ; nettoyage et split lus dans [`configs/stacking.yaml`](../configs/stacking.yaml), comme pour le modèle entraîné ; résultats lus dans [`notebooks_prod/04_multimodal_and_results.ipynb`](../notebooks_prod/04_multimodal_and_results.ipynb) |
 
 Mise en place du projet GCP (une seule fois) :
 

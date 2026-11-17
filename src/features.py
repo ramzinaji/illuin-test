@@ -10,28 +10,29 @@ import torch
 from sentence_transformers import SentenceTransformer
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from src.config import (
-    CODE_BATCH_SIZE,
-    CODE_MAX_TOKENS,
-    CODE_MODEL,
-    DIFFICULTY_BINS,
-    TEXT_BATCH_SIZE,
-    TEXT_MODEL,
-)
+from src.config import EncoderConfig
 
 logger = logging.getLogger(__name__)
 
 # Un tableau par bloc, aligné sur les lignes du DataFrame
 Blocks = dict[str, np.ndarray]
 
+# Blocs embeddings de texte : colonne nettoyée en entrée, colonne d'origine (nom du cache)
+TEXT_BLOCKS = {
+    "description": ("text_clean", "prob_desc_description"),
+    "input_spec": ("input_spec_clean", "prob_desc_input_spec"),
+    "notes": ("notes_clean", "prob_desc_notes"),
+}
+
 
 @dataclass
 class Encoders:
     text: SentenceTransformer
     code: SentenceTransformer
+    config: EncoderConfig
 
 
-def load_encoders() -> Encoders:
+def load_encoders(cfg: EncoderConfig) -> Encoders:
     device = (
         "cuda"
         if torch.cuda.is_available()
@@ -39,9 +40,10 @@ def load_encoders() -> Encoders:
         if torch.backends.mps.is_available()
         else "cpu"
     )
-    code = SentenceTransformer(CODE_MODEL, device=device)
-    code.max_seq_length = CODE_MAX_TOKENS
-    return Encoders(text=SentenceTransformer(TEXT_MODEL, device=device), code=code)
+    code = SentenceTransformer(cfg.code_model, device=device)
+    code.max_seq_length = cfg.code_max_tokens
+    text = SentenceTransformer(cfg.text_model, device=device)
+    return Encoders(text=text, code=code, config=cfg)
 
 
 def embed(
@@ -79,48 +81,45 @@ def embed(
     return embeddings
 
 
-def build_blocks(
-    df: pd.DataFrame, encoders: Encoders, cache_dir: Path | None = None
-) -> Blocks:
-    """Tous les blocs du modèle ; `df` doit contenir les colonnes de `preprocessing.add_text_columns`."""
-    text, code = encoders.text, encoders.code
-    return {
-        "description": embed(
-            df["text_clean"],
-            text,
-            TEXT_MODEL,
-            "prob_desc_description",
-            TEXT_BATCH_SIZE,
+def _build_block(
+    name: str, df: pd.DataFrame, encoders: Encoders, cache_dir: Path | None
+) -> np.ndarray:
+    cfg = encoders.config
+    if name in TEXT_BLOCKS:
+        column, cache_name = TEXT_BLOCKS[name]
+        return embed(
+            df[column],
+            encoders.text,
+            cfg.text_model,
+            cache_name,
+            cfg.text_batch_size,
             cache_dir,
-        ),
-        "input_spec": embed(
-            df["input_spec_clean"],
-            text,
-            TEXT_MODEL,
-            "prob_desc_input_spec",
-            TEXT_BATCH_SIZE,
-            cache_dir,
-        ),
-        "notes": embed(
-            df["notes_clean"],
-            text,
-            TEXT_MODEL,
-            "prob_desc_notes",
-            TEXT_BATCH_SIZE,
-            cache_dir,
-        ),
-        "code": embed(
+        )
+    if name == "code":
+        return embed(
             df["source_code"],
-            code,
-            CODE_MODEL,
+            encoders.code,
+            cfg.code_model,
             "source_code",
-            CODE_BATCH_SIZE,
+            cfg.code_batch_size,
             cache_dir,
-        ),
-        # Blocs bruts : leur transformation est apprise dans le modèle, sur les données d'entraînement
-        "difficulty": df[["difficulty"]].to_numpy(dtype=float),
-        "tfidf_desc": df["text_lemma"].to_numpy(),
-    }
+        )
+    # Blocs bruts : leur transformation est apprise dans le modèle, sur les données d'entraînement
+    if name == "difficulty":
+        return df[["difficulty"]].to_numpy(dtype=float)
+    if name == "tfidf_desc":
+        return df["text_lemma"].to_numpy()
+    raise ValueError(f"Bloc inconnu : {name}")
+
+
+def build_blocks(
+    df: pd.DataFrame,
+    encoders: Encoders,
+    names: list[str],
+    cache_dir: Path | None = None,
+) -> Blocks:
+    """Les blocs `names` ; `df` doit contenir les colonnes de `preprocessing.add_text_columns`."""
+    return {name: _build_block(name, df, encoders, cache_dir) for name in names}
 
 
 def subset(blocks: Blocks, rows: np.ndarray) -> Blocks:
@@ -128,17 +127,20 @@ def subset(blocks: Blocks, rows: np.ndarray) -> Blocks:
 
 
 class DifficultyEncoder(BaseEstimator, TransformerMixin):
-    """One-hot de la difficulté : tranches de quantiles (apprises au fit) + une colonne « inconnue » (NaN, -1)."""
+    """One-hot de la difficulté : `n_bins` tranches de quantiles (apprises au fit) + une colonne « inconnue »."""
+
+    def __init__(self, n_bins: int = 5):
+        self.n_bins = n_bins
 
     def fit(self, X: np.ndarray, y=None) -> "DifficultyEncoder":
         values = X[:, 0]
         known = values[values > 0]  # NaN > 0 est faux : NaN et -1 sont exclus
-        self.edges_ = np.quantile(known, np.linspace(0, 1, DIFFICULTY_BINS + 1)[1:-1])
+        self.edges_ = np.quantile(known, np.linspace(0, 1, self.n_bins + 1)[1:-1])
         return self
 
     def transform(self, X: np.ndarray) -> np.ndarray:
         values = X[:, 0]
         column = np.where(
-            values > 0, np.digitize(np.nan_to_num(values), self.edges_), DIFFICULTY_BINS
+            values > 0, np.digitize(np.nan_to_num(values), self.edges_), self.n_bins
         )
-        return np.eye(DIFFICULTY_BINS + 1)[column]
+        return np.eye(self.n_bins + 1)[column]

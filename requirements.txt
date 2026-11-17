@@ -1,8 +1,9 @@
+# --- Pipeline de production (src/) ---
+
 # Data manipulation & numerical computing
 numpy>=1.26,<3.0
 pandas>=2.2,<3.0
 scipy>=1.12,<2.0
-pyarrow>=15.0
 
 # Machine Learning & NLP
 scikit-learn>=1.4,<2.0
@@ -15,26 +16,30 @@ sentence-transformers>=3.0
 nltk>=3.8
 langdetect>=1.0.9
 
+# Configuration (configs/stacking.yaml)
+pyyaml>=6.0
+
 # LLM (Gemini via Vertex AI, src/llm_tagger.py)
 google-genai>=1.0
 
-# Topic modeling
+# --- Notebooks (notebooks_prod/) uniquement ---
+
+# Données nettoyées partagées entre notebooks (data/processed/clean.parquet)
+pyarrow>=15.0
+
+# Topic modeling (notebook 02)
 bertopic>=0.16
 umap-learn>=0.5
 hdbscan>=0.8.33
-
-# CLI & Configuration
-typer>=0.12
-pyyaml>=6.0
 
 # Visualization & Exploration
 matplotlib>=3.8
 seaborn>=0.13
 ipykernel>=6.29
 
-# Data download
+# Data download (notebook 01)
 gdown>=5.1
 
-# Code Quality & Testing
+# --- Qualité du code ---
 pytest>=8.0
 ruff>=0.4

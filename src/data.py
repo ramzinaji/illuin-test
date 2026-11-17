@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 
-from src.config import SEED, TAGS, TEST_SIZE, VAL_SIZE
+from src.config import TAGS, SplitConfig
 
 
 def _sample_id(path: Path) -> int:
@@ -32,18 +32,20 @@ def label_matrix(tags: pd.Series) -> np.ndarray:
     return np.array([[tag in ts for tag in TAGS] for ts in tags], dtype=int)
 
 
-def _stratified_split(Y: np.ndarray, test_size: float) -> tuple[np.ndarray, np.ndarray]:
+def _stratified_split(
+    Y: np.ndarray, test_size: float, seed: int
+) -> tuple[np.ndarray, np.ndarray]:
     splitter = MultilabelStratifiedShuffleSplit(
-        n_splits=1, test_size=test_size, random_state=SEED
+        n_splits=1, test_size=test_size, random_state=seed
     )
     return next(splitter.split(np.zeros(len(Y)), Y))
 
 
-def split_labels(Y: np.ndarray) -> np.ndarray:
+def split_labels(Y: np.ndarray, cfg: SplitConfig, seed: int) -> np.ndarray:
     """Nom du split de chaque exemple, stratifié sur les 8 tags (itératif, adapté au multi-label)."""
-    rest, test = _stratified_split(Y, TEST_SIZE)
-    val_ratio = VAL_SIZE / (1 - TEST_SIZE)  # pour que val fasse 15 % du total
-    _, val = _stratified_split(Y[rest], val_ratio)
+    rest, test = _stratified_split(Y, cfg.test_size, seed)
+    val_ratio = cfg.val_size / (1 - cfg.test_size)  # val_size est une part du total
+    _, val = _stratified_split(Y[rest], val_ratio, seed)
     split = np.full(len(Y), "train", dtype=object)
     split[rest[val]] = "val"
     split[test] = "test"

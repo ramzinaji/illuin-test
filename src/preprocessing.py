@@ -10,7 +10,7 @@ from nltk.stem import WordNetLemmatizer
 from scipy.sparse.csgraph import connected_components
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from src.config import LANGUAGE, NEAR_DUP_THRESHOLD
+from src.config import CleaningConfig
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +54,11 @@ def add_text_columns(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def drop_near_duplicates(df: pd.DataFrame) -> pd.DataFrame:
+def drop_near_duplicates(df: pd.DataFrame, cfg: CleaningConfig) -> pd.DataFrame:
     """Garde un exemple (le plus petit sample_id) par groupe d'énoncés au cosinus TF-IDF > seuil."""
-    tfidf = TfidfVectorizer(min_df=2).fit_transform(df["text_lemma"])
+    tfidf = TfidfVectorizer(min_df=cfg.near_dup_min_df).fit_transform(df["text_lemma"])
     # TF-IDF normalisé L2 : le produit scalaire est la similarité cosinus
-    similar = (tfidf @ tfidf.T) > NEAR_DUP_THRESHOLD
+    similar = (tfidf @ tfidf.T) > cfg.near_dup_threshold
     _, groups = connected_components(similar, directed=False)
     return (
         df.assign(dup_group=groups)
@@ -68,10 +68,10 @@ def drop_near_duplicates(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def clean_dataset(raw: pd.DataFrame) -> pd.DataFrame:
-    """Jeu d'entraînement : énoncés anglais, textes nettoyés, sans quasi-doublons."""
-    english = raw[raw["prob_desc_description"].map(detect_language) == LANGUAGE]
-    df = drop_near_duplicates(add_text_columns(english))
+def clean_dataset(raw: pd.DataFrame, cfg: CleaningConfig) -> pd.DataFrame:
+    """Jeu d'entraînement : énoncés dans la langue attendue, textes nettoyés, sans quasi-doublons."""
+    english = raw[raw["prob_desc_description"].map(detect_language) == cfg.language]
+    df = drop_near_duplicates(add_text_columns(english), cfg)
     logger.info(
         "Nettoyage : %d -> %d (langue) -> %d (quasi-doublons)",
         len(raw),

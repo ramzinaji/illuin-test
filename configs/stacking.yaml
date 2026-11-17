@@ -1,0 +1,59 @@
+# Modèle de production : stacking (notebook 04, meilleure Macro-AP en CV : 0,671)
+# Chaque valeur indique sa provenance ; « défaut » = jamais réglé en CV.
+
+seed: 42
+
+cleaning:                       # notebook 01
+  language: en                  # 17 énoncés en russe retirés
+  near_dup_threshold: 0.8       # cosinus TF-IDF ; au-delà, variantes easy/hard d'un même énoncé
+  near_dup_min_df: 2
+
+split:                          # notebook 01, stratification itérative multi-label
+  val_size: 0.15
+  test_size: 0.15
+
+encoders:                       # notebooks 02 et 04
+  text_model: sentence-transformers/all-mpnet-base-v2
+  text_batch_size: 32           # longueur max 384 tokens (défaut du modèle) : 2,9 % de textes tronqués
+  code_model: microsoft/unixcoder-base
+  code_max_tokens: 1024         # 9 % de codes tronqués, contre 25 % à 512
+  code_batch_size: 16
+
+features:
+  difficulty:                   # notebook 04
+    bins: 5                     # tranches de quantiles apprises sur train, + 1 tranche « inconnue » (NaN, -1)
+  tfidf_desc:                   # notebook 02
+    min_df: 10
+    stop_words: english
+    sublinear_tf: true
+
+model:
+  type: stacking
+  blocks: [description, input_spec, notes, code, difficulty, tfidf_desc]   # notebook 04, ablation
+
+  level1:                       # une régression logistique one-vs-rest par bloc
+    class_weight: balanced
+    max_iter: 2000
+    C:                          # régularisation L2 (plus petit = plus contraint)
+      description: 1.0          # notebook 03 : C=0,1 meilleur en CV mais à l'écart-type près, défaut gardé
+      tfidf_desc: 1.0           # notebook 02 : meilleur de la grille 0,1 à 10
+      input_spec: 1.0           # défaut
+      notes: 1.0                # défaut
+      code: 1.0                 # défaut
+      difficulty: 1.0           # défaut
+
+  level2:                       # une régression logistique par tag, sur les logits out-of-fold
+    n_folds: 5                  # folds out-of-fold, stratifiés multi-label
+    logit_eps: 1.0e-6           # probabilités bornées à [eps, 1 - eps] avant le logit
+    class_weight: balanced
+    max_iter: 100               # défaut sklearn
+    C: 1.0                      # défaut
+
+thresholds:                     # un seuil par tag, maximisant le F1 sur val
+  start: 0.05
+  stop: 0.95
+  step: 0.01
+  # Valeurs apprises par le dernier entraînement (sauvegardées dans models/stacking.joblib,
+  # recalculées à chaque train ; ici pour référence seulement) :
+  # math: 0.52, graphs: 0.76, strings: 0.76, number theory: 0.79,
+  # trees: 0.92, geometry: 0.80, games: 0.92, probabilities: 0.93

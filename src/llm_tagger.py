@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.config import LLM_PREDICTIONS_DIR, RAW_DATA_DIR, TAGS
+from src.config import LLM_PREDICTIONS_DIR, RAW_DATA_DIR, TAGS, load_config
 from src.data import label_matrix, load_samples, split_labels
 from src.preprocessing import clean_dataset
 
@@ -189,8 +189,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    df = clean_dataset(load_samples(RAW_DATA_DIR))
-    test = df[split_labels(label_matrix(df["tags"])) == "test"]
+    # Même nettoyage et même split que le modèle entraîné
+    cfg = load_config()
+    df = clean_dataset(load_samples(RAW_DATA_DIR), cfg.cleaning)
+    test = df[split_labels(label_matrix(df["tags"]), cfg.split, cfg.seed) == "test"]
     predict_split(
         test.head(args.limit) if args.limit else test,
         args.model,
