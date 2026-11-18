@@ -36,9 +36,12 @@ retenues (regex, MLP, concaténation). Ils ne dépendent pas de `src/`. À lire 
 
 1. `01_eda_and_cleaning` : exploration, filtre de langue, suppression des quasi-doublons, split train / val / test.
    Écrit `data/processed/clean.parquet`, utilisé par les suivants.
-2. `02_nlp_representations` : TF-IDF et embeddings Sentence-BERT, comparés en validation croisée.
-3. `03_models_benchmark` : regex, régression logistique et MLP sur l'énoncé seul.
-4. `04_multimodal_and_results` : ajout du code et des autres champs, stacking, résultats sur le test, comparaison au LLM.
+2. `02_feature_engineering` : pour chaque source (énoncé, spécification d'entrée, notes, code, difficulté,
+   métadonnées), les représentations comparées et celle retenue, puis une ablation pour choisir les sources.
+3. `03_models_benchmark` : choix du modèle. D'abord regex, régression logistique et MLP sur l'énoncé seul, puis
+   concaténation, stacking et MLP sur toutes les sources retenues.
+4. `04_results` : évaluation du modèle retenu sur le test, comparaison aux alternatives et à un LLM, analyse
+   d'erreurs et latence.
 
 `src/` ne contient que le modèle retenu :
 

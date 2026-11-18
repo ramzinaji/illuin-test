@@ -1,4 +1,4 @@
-# Modèle de production : stacking (notebook 04, meilleure Macro-AP en CV : 0,671)
+# Modèle de production : stacking (notebook 03, section 5 : meilleure Macro-AP en CV, 0,671)
 # Chaque valeur indique sa provenance ; « défaut » = jamais réglé en CV.
 
 seed: 42
@@ -12,7 +12,7 @@ split:                          # notebook 01, stratification itérative multi-l
   val_size: 0.15
   test_size: 0.15
 
-encoders:                       # notebooks 02 et 04
+encoders:                       # notebook 02, sections 1 à 3
   text_model: sentence-transformers/all-mpnet-base-v2
   text_batch_size: 32           # longueur max 384 tokens (défaut du modèle) : 2,9 % de textes tronqués
   code_model: microsoft/unixcoder-base
@@ -20,23 +20,23 @@ encoders:                       # notebooks 02 et 04
   code_batch_size: 16
 
 features:
-  difficulty:                   # notebook 04
+  difficulty:                   # notebook 02, section 4
     bins: 5                     # tranches de quantiles apprises sur train, + 1 tranche « inconnue » (NaN, -1)
-  tfidf_desc:                   # notebook 02
+  tfidf_desc:                   # notebook 02, section 1
     min_df: 10
     stop_words: english
     sublinear_tf: true
 
 model:
   type: stacking
-  blocks: [description, input_spec, notes, code, difficulty, tfidf_desc]   # notebook 04, ablation
+  blocks: [description, input_spec, notes, code, difficulty, tfidf_desc]   # notebook 02 (ablation) ; tfidf_desc : notebook 03, section 5.2
 
   level1:                       # une régression logistique one-vs-rest par bloc
     class_weight: balanced
     max_iter: 2000
     C:                          # régularisation L2 (plus petit = plus contraint)
-      description: 1.0          # notebook 03 : C=0,1 meilleur en CV mais à l'écart-type près, défaut gardé
-      tfidf_desc: 1.0           # notebook 02 : meilleur de la grille 0,1 à 10
+      description: 1.0          # notebook 03, section 2 : C=0,1 meilleur en CV mais à l'écart-type près, défaut gardé
+      tfidf_desc: 1.0           # notebook 02, section 1 : meilleur de la grille 0,1 à 10
       input_spec: 1.0           # défaut
       notes: 1.0                # défaut
       code: 1.0                 # défaut
