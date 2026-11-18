@@ -4,6 +4,7 @@ import logging
 import re
 import unicodedata
 
+import nltk
 import pandas as pd
 from langdetect import DetectorFactory, LangDetectException, detect
 from nltk.stem import WordNetLemmatizer
@@ -18,6 +19,13 @@ DetectorFactory.seed = 0  # langdetect est aléatoire sans graine
 # Lettres cyrilliques glissées dans des énoncés anglais (vues pendant l'exploration)
 HOMOGLYPHS = str.maketrans("АВЕКМНОРСТХаеорсухі", "ABEKMHOPCTXaeopcyxi")
 _lemmatizer = WordNetLemmatizer()
+
+# Sur une installation neuve, le dictionnaire WordNet est absent : on le télécharge une fois
+try:
+    _lemmatizer.lemmatize("tests")
+except LookupError:
+    logger.info("Téléchargement du dictionnaire WordNet (NLTK)")
+    nltk.download("wordnet", quiet=True)
 
 
 def normalize_text(text: str | None) -> str:

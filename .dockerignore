@@ -1,0 +1,6 @@
+# Seuls requirements-lock.txt, src/ et configs/ entrent dans l'image
+*
+!requirements-lock.txt
+!src/
+!configs/
+**/__pycache__
